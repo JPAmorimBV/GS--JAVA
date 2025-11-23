@@ -64,5 +64,4 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(Collections.singletonMap("error", msg), HttpStatus.INTERNAL_SERVER_ERROR);
         }
         
-    }
 }
