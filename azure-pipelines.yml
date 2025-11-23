@@ -1,3 +1,11 @@
+# =====================================
+# Azure Pipelines - GS Java Project
+# =====================================
+# Phases:
+# 1. Build & Test - Maven clean verify package
+# 2. Publish Artifacts
+# 3. Deploy to Azure VM (Self-Hosted Agent)
+
 trigger:
   branches:
     include:
@@ -5,24 +13,36 @@ trigger:
       - master
 
 pool:
-  vmImage: 'ubuntu-latest'
+  name: 'Default'  # Self-Hosted Agent Pool
+  demands:
+    - Agent.OS -equals Linux
 
 variables:
   buildConfiguration: 'Release'
   MAVEN_CACHE_FOLDER: $(Pipeline.Workspace)/.m2/repository
   MAVEN_OPTS: '-Dmaven.repo.local=$(MAVEN_CACHE_FOLDER)'
+  APP_NAME: 'gs-java-app'
+  APP_PORT: '8080'
+  VM_USER: 'admin'
+  ARTIFACT_NAME: 'gs-java-app.jar'
 
 stages:
+  # ===== STAGE 1: BUILD =====
   - stage: Build
-    displayName: 'Build and Test'
+    displayName: 'Build, Test, and Package'
     jobs:
       - job: BuildAndTest
-        displayName: 'Build, Test, and Package'
+        displayName: 'Maven Build & Test'
         steps:
-          - task: UsePythonVersion@0
+          # Install Java 17
+          - task: JavaToolInstaller@0
             inputs:
-              versionSpec: '3.x'
+              versionSpec: '17'
+              jdkArchitectureOption: 'x64'
+              jdkSourceOption: 'PreInstalled'
+            displayName: 'Use Java 17'
 
+          # Build with Maven
           - task: Maven@3
             displayName: 'Build with Maven'
             inputs:
@@ -38,14 +58,24 @@ stages:
               effectivePomSkip: false
               sonarQubeRunAnalysis: false
 
+          # Publish test results
           - task: PublishTestResults@2
             displayName: 'Publish Test Results'
             condition: always()
             inputs:
               testResultsFormat: 'JUnit'
               testResultsFiles: '**/TEST-*.xml'
-              failTaskOnFailedTests: false
+              failTaskOnFailedTests: true
 
+          # Copy JAR to staging directory
+          - task: CopyFiles@2
+            displayName: 'Copy Application JAR'
+            inputs:
+              SourceFolder: '$(Build.SourcesDirectory)/target'
+              Contents: '**/*.jar'
+              TargetFolder: '$(Build.ArtifactStagingDirectory)'
+
+          # Publish build artifacts
           - task: PublishBuildArtifacts@1
             displayName: 'Publish Build Artifacts'
             inputs:
@@ -53,29 +83,72 @@ stages:
               artifactName: 'drop'
               publishLocation: 'Container'
 
-  # Stage de Deploy comentado por enquanto
-  # Ative quando tiver os recursos Azure criados
-  # - stage: Deploy
-  #   displayName: 'Deploy to Azure'
-  #   dependsOn: Build
-  #   condition: succeeded()
-  #   jobs:
-  #     - job: DeployToAzure
-  #       displayName: 'Deploy to Azure Web App'
-  #       steps:
-  #         - task: DownloadBuildArtifacts@0
-  #           displayName: 'Download Build Artifacts'
-  #           inputs:
-  #             buildType: 'current'
-  #             downloadType: 'single'
-  #             artifactName: 'drop'
-  #             downloadPath: '$(Build.ArtifactStagingDirectory)'
-  #
-  #         - task: AzureWebApp@1
-  #           displayName: 'Deploy to Web App'
-  #           inputs:
-  #             azureSubscription: 'GS-Azure-Connection'
-  #             appType: 'webAppLinux'
-  #             appName: 'gs-java-webapp'
-  #             package: '$(Build.ArtifactStagingDirectory)/**/*.jar'
-  #             deploymentMethod: 'zipDeploy'
+  # ===== STAGE 2: DEPLOY =====
+  - stage: Deploy
+    displayName: 'Deploy to Azure VM'
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - job: DeployToVM
+        displayName: 'Deploy Application to VM'
+        steps:
+          # Download artifacts
+          - task: DownloadBuildArtifacts@0
+            displayName: 'Download Build Artifacts'
+            inputs:
+              buildType: 'current'
+              downloadType: 'single'
+              artifactName: 'drop'
+              downloadPath: '$(Build.ArtifactStagingDirectory)'
+
+          # Deploy script
+          - script: |
+              echo "=== Starting Deployment ==="
+              cd $(Build.SourcesDirectory)
+              
+              # Stop running application
+              echo "Stopping existing application..."
+              pkill -f "$(APP_NAME)" || true
+              sleep 2
+              
+              # Create deployment directory
+              mkdir -p ~/app/$(APP_NAME)
+              
+              # Copy new JAR
+              echo "Copying new application JAR..."
+              cp $(Build.ArtifactStagingDirectory)/*.jar ~/app/$(APP_NAME)/$(ARTIFACT_NAME)
+              
+              # Set permissions
+              chmod +x ~/app/$(APP_NAME)/$(ARTIFACT_NAME)
+              
+              # Start new application
+              echo "Starting application on port $(APP_PORT)..."
+              cd ~/app/$(APP_NAME)
+              nohup java -jar $(ARTIFACT_NAME) --server.port=$(APP_PORT) > app.log 2>&1 &
+              
+              sleep 3
+              
+              # Health check
+              echo "Checking application health..."
+              if curl -f http://localhost:$(APP_PORT)/actuator/health; then
+                echo "✓ Application is running successfully"
+              else
+                echo "✗ Application failed to start"
+                cat app.log
+                exit 1
+              fi
+            displayName: 'Deploy and Start Application'
+            continueOnError: false
+            env:
+              JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+
+          # Validation
+          - script: |
+              echo "=== Deployment Validation ==="
+              echo "Checking application status..."
+              curl -i http://localhost:$(APP_PORT)/actuator/health
+              echo ""
+              echo "Process status:"
+              ps aux | grep $(APP_NAME) | grep -v grep
+            displayName: 'Validate Deployment'
+            continueOnError: true
