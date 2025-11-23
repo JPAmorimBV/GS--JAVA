@@ -83,3 +83,161 @@ gcloud run deploy smartleader --image gcr.io/PROJECT_ID/smartleader:${IMAGE_TAG}
 ---
 
 Se quiser, eu gero agora um `docker-compose.prod.yml` de exemplo e o script `scripts/docker-build-push.sh` que automatiza build + push (ex.: Docker Hub). Diga se prefere Docker Hub, GHCR, ou AWS ECR e eu adapto o script automaticamente.
+
+
+## Azure Pipelines & CI/CD com Self-Hosted Agent
+
+### Visão Geral
+
+Este projeto utiliza **Azure Pipelines** com um **Self-Hosted Agent** para automatizar o processo de build, teste e deployment.
+
+- **Pipeline**: `azure-pipelines.yml` (raiz do repositório)
+- **Agent**: Executado em uma VM Azure Linux
+- **Trigger**: Toda mudança em `main` ou `master` dispara o pipeline
+
+### Arquitetura da Pipeline
+
+```
+┌─────────────────────┐
+│  Git Push (main)    │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│   Azure Pipelines   │ ◄─── Dispara automáticamente
+└──────────┬──────────┘
+           │
+           ├──► STAGE 1: BUILD
+           │    - Maven clean verify package
+           │    - Java 17 setup
+           │    - Publish JUnit test results
+           │    - Publish artifacts
+           │
+           └──► STAGE 2: DEPLOY (se BUILD sucesso)
+                - Download artifacts
+                - Stop aplicação anterior
+                - Copy novo JAR
+                - Start nova aplicação
+                - Health check via /actuator/health
+```
+
+### Setup do Self-Hosted Agent
+
+#### Pré-requisitos
+
+- VM Linux (Ubuntu 18.04+) já criada em Azure
+- Token PAT (Personal Access Token) do Azure DevOps
+- Acesso SSH ou Cloud Shell para a VM
+
+#### Passos de Instalação
+
+**1. Clone o repositório na VM:**
+
+```bash
+cd ~
+git clone https://github.com/JPAmorimBV/GS--JAVA.git
+cd GS--JAVA
+```
+
+**2. Faça download do script de setup:**
+
+```bash
+chmod +x scripts/setup-azure-agent.sh
+```
+
+**3. Execute o script com seu PAT token:**
+
+```bash
+./scripts/setup-azure-agent.sh '<SEU_PAT_TOKEN>' 'agent-vm' 'https://dev.azure.com/seu-org'
+```
+
+Substituir:
+- `<SEU_PAT_TOKEN>`: Seu token PAT do Azure DevOps
+- `seu-org`: Sua organização Azure DevOps
+
+**Exemplo com seu token:**
+```bash
+./scripts/setup-azure-agent.sh '5h6nO9MhNwM61e7gF80V7wezlKaWtDyQwvBEVggbFP4b37RXxVS8JQQJ99BKACAAAAAE8413AAASAZDO1mXj' 'agent-vm' 'https://dev.azure.com/seu-org'
+```
+
+**4. Verifique o status do agent:**
+
+```bash
+sudo systemctl status vsts.agent.Default.agent-vm.service
+```
+
+**5. Para ver os logs:**
+
+```bash
+sudo journalctl -u vsts.agent.Default.agent-vm.service -f
+```
+
+### Configuração das Variáveis de Pipeline
+
+Variáveis definidas em `azure-pipelines.yml`:
+
+```yaml
+APP_NAME: 'gs-java-app'           # Nome da aplicação
+APP_PORT: '8080'                  # Porta onde a app roda
+ARTIFACT_NAME: 'gs-java-app.jar'  # Nome do JAR
+MAVEN_CACHE_FOLDER: ...           # Cache do Maven
+```
+
+Edite `azure-pipelines.yml` se precisar alterar estes valores.
+
+### Executar o Pipeline Manualmente
+
+1. Vá para https://dev.azure.com/seu-org
+2. Selecione o projeto
+3. Vá para **Pipelines**
+4. Clique em **GS--JAVA**
+5. Clique em **Run pipeline**
+6. Confirme
+
+### Validar Deployment
+
+Após o pipeline completar com sucesso:
+
+```bash
+# Health check
+curl http://localhost:8080/actuator/health
+
+# Logs da aplicação
+tail -f ~/app/gs-java-app/app.log
+
+# Verificar processo
+ps aux | grep gs-java-app
+```
+
+### Troubleshooting
+
+#### Agent não conecta
+
+```bash
+# Reiniciar o serviço
+sudo systemctl restart vsts.agent.Default.agent-vm.service
+
+# Verificar logs
+sudo journalctl -u vsts.agent.Default.agent-vm.service -n 50
+```
+
+#### Build falha
+
+1. Verifique que Maven está instalado: `mvn -v`
+2. Verifique que Java 17 está disponível: `java -version`
+3. Limpe o cache Maven: `rm -rf ~/.m2`
+
+#### Deploy falha
+
+1. Verifique porta 8080 está livre: `netstat -tlnp | grep 8080`
+2. Verifique espaço em disco: `df -h`
+3. Verifique logs da aplicação: `tail -f ~/app/gs-java-app/app.log`
+
+### Próximos Passos
+
+- [ ] Setup Self-Hosted Agent (execute script)
+- [ ] Teste o pipeline com push para main
+- [ ] Configure alertas de falha no Azure DevOps
+- [ ] Implemente approval gates antes de deploy para produção
+- [ ] Adicione SonarQube para análise de código
+- [ ] Implemente blue-green deployment
