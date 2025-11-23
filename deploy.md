@@ -157,7 +157,7 @@ Substituir:
 
 **Exemplo com seu token:**
 ```bash
-./scripts/setup-azure-agent.sh '5h6nO9MhNwM61e7gF80V7wezlKaWtDyQwvBEVggbFP4b37RXxVS8JQQJ99BKACAAAAAE8413AAASAZDO1mXj' 'agent-vm' 'https://dev.azure.com/seu-org'
+./scripts/setup-azure-agent.sh '<YOUR_PAT_TOKEN>61e7gF80V7wezlKaWtDyQwvBEVggbFP4b37RXxVS8JQQJ99BKACAAAAAE8413AAASAZDO1mXj' 'agent-vm' 'https://dev.azure.com/seu-org'
 ```
 
 **4. Verifique o status do agent:**
