@@ -61,8 +61,9 @@ public class GlobalExceptionHandler {
         String msg = messageSource.getMessage("user.email.exists", null, "Email already registered", LocaleContextHolder.getLocale());
         if (msg == null || msg.isEmpty()) {
             msg = "Email already registered";
-        return new ResponseEntity<>(Collections.singletonMap("error", msg), HttpStatus.INTERNAL_SERVER_ERROR);
         }
+        return new ResponseEntity<>(Collections.singletonMap("error", msg), HttpStatus.INTERNAL_SERVER_ERROR);
+    }
         
 }
     
