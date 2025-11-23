@@ -43,8 +43,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Object> handleDataIntegrity(DataIntegrityViolationException ex, WebRequest request) {
-        String msg = messageSource.getMessage("user.email.exists", null, "Email already registered", LocaleContextHolder.getLocale());
-        if (msg == null || msg.isEmpty()) {
+        String msg;
+        try {
+            msg = messageSource.getMessage("user.email.exists", null, "Email already registered", LocaleContextHolder.getLocale());
+        } catch (Exception e) {
+            msg = "Email already registered";
+        }        if (msg == null || msg.isEmpty()) {
             msg = "Email already registered";
         }        // If it's a unique constraint on email we already handle in controller, but fallback here
         return new ResponseEntity<>(Collections.singletonMap("error", msg), HttpStatus.CONFLICT);
@@ -58,8 +62,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Object> handleAll(Exception ex, WebRequest request) {
-        String msg = messageSource.getMessage("user.email.exists", null, "Email already registered", LocaleContextHolder.getLocale());
-        if (msg == null || msg.isEmpty()) {
+        String msg;
+        try {
+            msg = messageSource.getMessage("user.email.exists", null, "Email already registered", LocaleContextHolder.getLocale());
+        } catch (Exception e) {
+            msg = "Email already registered";
+        }        if (msg == null || msg.isEmpty()) {
             msg = "Email already registered";
         }
         return new ResponseEntity<>(Collections.singletonMap("error", msg), HttpStatus.INTERNAL_SERVER_ERROR);
