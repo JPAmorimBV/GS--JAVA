@@ -41,37 +41,24 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errors, new HttpHeaders(), HttpStatus.BAD_REQUEST);
     }
 
-    @ExceptionHandler(DataIntegrityViolationException.class)
+@ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Object> handleDataIntegrity(DataIntegrityViolationException ex, WebRequest request) {
-        String msg;
-        try {
-            msg = messageSource.getMessage("user.email.exists", null, "Email already registered", LocaleContextHolder.getLocale());
-        } catch (Exception e) {
-            msg = "Email already registered";
-        }        if (msg == null || msg.isEmpty()) {
-            msg = "Email already registered";
-        }        // If it's a unique constraint on email we already handle in controller, but fallback here
-        return new ResponseEntity<>(Collections.singletonMap("error", msg), HttpStatus.CONFLICT);
+        return new ResponseEntity<>(Collections.singletonMap("error", "Email already registered"), HttpStatus.CONFLICT);
     }
-
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, WebRequest request) {
         String msg = messageSource.getMessage("auth.unauthorized", null, LocaleContextHolder.getLocale());
         return new ResponseEntity<>(Collections.singletonMap("error", msg), HttpStatus.FORBIDDEN);
     }
 
-    @ExceptionHandler(Exception.class)
+@ExceptionHandler(Exception.class)
     public ResponseEntity<Object> handleAll(Exception ex, WebRequest request) {
-        String msg;
-        try {
-            msg = messageSource.getMessage("user.email.exists", null, "Email already registered", LocaleContextHolder.getLocale());
-        } catch (Exception e) {
-            msg = "Email already registered";
-        }        if (msg == null || msg.isEmpty()) {
-            msg = "Email already registered";
+        // Check if it's a DataIntegrityViolationException (duplicate key)
+        if (ex.getCause() instanceof org.hibernate.exception.ConstraintViolationException) {
+            return new ResponseEntity<>(Collections.singletonMap("error", "Email already registered"), HttpStatus.CONFLICT);
         }
-        return new ResponseEntity<>(Collections.singletonMap("error", msg), HttpStatus.INTERNAL_SERVER_ERROR);
+        // Default error handling
+        return new ResponseEntity<>(Collections.singletonMap("error", "Internal server error"), HttpStatus.INTERNAL_SERVER_ERROR);
     }
-        
 }
     
