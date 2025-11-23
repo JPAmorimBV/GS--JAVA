@@ -84,7 +84,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
 public ResponseEntity<?> handleDataIntegrity(DataIntegrityViolationException ex) {
         return new ResponseEntity<>(Collections.singletonMap("error", "Email already registered"), HttpStatus.CONFLICT);
-    }        nHandler(Exception.class)
+}
+
+    @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleGeneral(Exception ex) {
         Map<String,Object> body = new HashMap<>();
         body.put("timestamp", Instant.now().toString());
