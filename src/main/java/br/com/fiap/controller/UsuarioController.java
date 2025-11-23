@@ -50,13 +50,9 @@ public class UsuarioController {
         // Encode password before saving
         toSave.setDsSenha(passwordEncoder.encode(toSave.getDsSenha()));
 
-        try {
+            
             Usuario saved = usuarioService.create(toSave);
             return ResponseEntity.status(HttpStatus.CREATED).body(UsuarioMapper.toDTO(saved));
-        } catch (DataIntegrityViolationException ex) {
-            String msg = messageSource.getMessage("user.email.exists", null, LocaleContextHolder.getLocale());
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(java.util.Collections.singletonMap("error", msg));
-        }
     }
 
     // Form submission endpoint for Thymeleaf UI
